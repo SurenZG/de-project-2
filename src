@@ -1,0 +1,70 @@
+drop table dm_rfm_segments;
+drop view analysis.orders;
+
+-- создадим представления из таблиц в production
+create view analysis.orders as select * from production.orders;
+create view analysis.orderitems as select * from production.orderitems;
+create view analysis.orderstatuses as select * from production.orderstatuses;
+create view analysis.orderstatuslog as select * from production.orderstatuslog;
+create view analysis.products as select * from production.products;
+create view analysis.users as select * from production.users;
+
+-- создадим таблицу
+create table dm_rfm_segments(
+client_id bigint PRIMARY KEY,
+recency bigint not NULL,
+frequency bigint not NULL, 
+monetary_value bigint not NULL 
+);
+
+-- добавим в таблицу данные, в каждом СТЕ фильтруем по статусу и дате
+insert into dm_rfm_segments 
+with date_group as (
+	select user_id, -- используем оконную функцию для нумерации и сортировки
+	 	   ROW_NUMBER() OVER (order by last_order) AS date_num
+	from (select user_id,
+		   	     max(order_ts) last_order
+		  from analysis.orders
+		  where status = 4 and date_part('year', order_ts) >= 2021
+		  group by user_id) foo
+),
+amt_group as (
+	select user_id, 
+       	   ROW_NUMBER() OVER (order by count(order_id)) AS amt_num
+	from analysis.orders
+	where status = 4 and date_part('year', order_ts) >= 2021
+	group by user_id
+),
+pay_group as (
+	select user_id, 
+       	   ROW_NUMBER() OVER (order by sum(payment)) AS pay_num
+	from analysis.orders
+	where status = 4 and date_part('year', order_ts) >= 2021
+	group by user_id
+)
+select dg.user_id, 
+	   case 
+	   		when date_num <= 200 then 1
+	   		when date_num <= 400 then 2
+	   		when date_num <= 600 then 3
+	   		when date_num <= 800 then 4
+	   		when date_num <= 1000 then 5
+	   end recency,
+	   case 
+	   		when amt_num <= 200 then 1
+	   		when amt_num <= 400 then 2
+	   		when amt_num <= 600 then 3
+	   		when amt_num <= 800 then 4
+	   		when amt_num <= 1000 then 5
+	   end frequency,
+	   case 
+	   		when pay_num <= 200 then 1
+	   		when pay_num <= 400 then 2
+	   		when pay_num <= 600 then 3
+	   		when pay_num <= 800 then 4
+	   		when pay_num <= 1000 then 5
+	   end monetary_value
+from date_group dg join amt_group ag on dg.user_id = ag.user_id join pay_group pg on dg.user_id = pg.user_id;
+
+
+select * from dm_rfm_segments;
