@@ -5,9 +5,9 @@
 -- shipping_country_rates
 drop table if exists public.shipping_country_rates cascade;
 create table public.shipping_country_rates(
-	shipping_country_id		   serial, 
-	shipping_country 		   varchar(100), 
-	shipping_country_base_rate numeric(14, 2),
+	shipping_country_id		serial, 
+	shipping_country 		varchar(100), 
+	shipping_country_base_rate	numeric(14, 2),
 	primary key (shipping_country_id)
 );
 insert into public.shipping_country_rates
